@@ -11,6 +11,8 @@
 *.so
 *.so.*
 *.dylib
+*.dblite
+*.log
 
 # Executables
 *.exe
