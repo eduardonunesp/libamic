@@ -53,6 +53,11 @@ amic_status_t amic_ast_check_auth(const char *resp)
     return regex_test("^Message: Authentication accepted$", resp);
 }
 
+amic_status_t amic_ast_event(const char *resp)
+{
+    return regex_test("^Event:.*$", resp);
+}
+
 static void on_amic_cmd_login(uv_write_t *req, int status) 
 {
 }
@@ -91,6 +96,43 @@ amic_status_t amic_cmd_login(amic_conn_t *conn,
     }
 
     return status;
+}
+
+amic_status_t amic_add_event(amic_conn_t *conn,
+                             const char *event,
+                             amic_ev_cb ev_cb)
+{
+    amic_status_t status = AMIC_STATUS_SUCCESS;
+    if (!conn)
+        return AMIC_STATUS_NULL_PTR;
+    int err = hashmap_put(conn->ev_map, strdup(event), (void*) ev_cb);
+    if (err != MAP_OK) {
+        return AMIC_STATUS_FAIL;
+    }
+
+    AMIC_DBG("Added event listener %s", event);
+    return status;
+}
+
+const char* amic_get_ev_value(amic_map_t amic_map, const char *key)
+{
+    char *ret = 0;
+    if (!amic_map)
+        return 0;
+
+#ifndef NDEBUG
+    AMIC_DBG("Test key %s", key);
+#endif
+
+    int map_err = hashmap_get(amic_map, (char*) key, (void**) (&ret));
+    if (map_err != MAP_OK) {
+#ifndef NDEBUG
+    AMIC_DBG("Test key not found %s", key);
+#endif
+        return 0;
+    }
+
+    return ret;
 }
 
 #endif

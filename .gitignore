@@ -13,6 +13,7 @@
 *.dylib
 *.dblite
 *.log
+*.swp
 
 # Executables
 *.exe

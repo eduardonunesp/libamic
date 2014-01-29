@@ -6,6 +6,7 @@
 #include <strings.h>
 #include <assert.h>
 #include <uv.h>
+#include "hashmap.h"
 
 #ifndef NDEBUG
 #define AMIC_DBG(STR, ...) fprintf(stdout, STR "\n", ##__VA_ARGS__)
@@ -37,9 +38,12 @@ typedef enum {
     AMIC_CMD_LOGIN
 } amic_cmd_t;
 
+typedef map_t amic_map_t;
+
 struct amic_conn_t;
 typedef void (*amic_conn_cb)(struct amic_conn_t *conn, amic_status_t status);
 typedef void (*amic_cmd_cb)(struct amic_conn_t *conn, amic_status_t status);
+typedef void (*amic_ev_cb)(struct amic_conn_t *conn, amic_map_t ev_keys);
 
 typedef struct amic_conn_t {
     char *ip_addr;
@@ -58,6 +62,8 @@ typedef struct amic_conn_t {
     amic_cmd_t cmd;
     amic_conn_cb conn_cb;
     amic_cmd_cb cmd_cb;
+
+    map_t ev_map;
 } amic_conn_t;
 
 amic_status_t amic_init_conn(amic_conn_t **conne,
@@ -74,9 +80,14 @@ void amic_run();
 amic_status_t amic_ast_banner(const char *banner);
 amic_status_t amic_ast_success(const char *response);
 amic_status_t amic_ast_check_auth(const char *response);
+amic_status_t amic_ast_event(const char *resp);
+const char* amic_get_ev_value(amic_map_t amic_map, const char *key);
 amic_status_t amic_cmd_login(amic_conn_t *conn,
                              const char *username,
                              const char *secret,
                              amic_cmd_cb cmd_cb);
+amic_status_t amic_add_event(amic_conn_t *conn,
+                             const char *event,
+                             amic_ev_cb ev_cb);
 
 #endif
