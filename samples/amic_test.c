@@ -24,7 +24,6 @@ static void on_event(amic_conn_t *conn,
                      amic_map_t keys) 
 {
     AMIC_DBG("ON EV %s", amic_get_ev_value(keys, "Event"));
-
 }
 
 int main(int argc, char *argv[]) 
