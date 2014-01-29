@@ -1,7 +1,10 @@
 libamic
 ====
 
-The libamic it's implementation of pure C-99, with libuv and c_hashmap, the current state of lib is "under development", but is possible to log in Asterisk Manager (AMI) and listen for events.
+The libamic it's implementation of pure C-99, with libuv and c_hashmap, so we are fully asynchronous and non-blocking (just because the libuv), the current state of lib is "under development", but is possible to log in Asterisk Manager (AMI) and listen for events.
+
+
+
 
 ```
 #include <stdio.h>
@@ -14,7 +17,7 @@ char *secret = 0;
 static void on_login(amic_conn_t *conn,
                      amic_status_t status) 
 {
-
+    /* Nothing to do, but you can do something after login */
 }
 
 static void on_connection(amic_conn_t *conn, 
@@ -22,6 +25,7 @@ static void on_connection(amic_conn_t *conn,
 {
     fprintf(stdout, "CONNECT STATUS %d\n", status);
     if (conn->state == AMIC_STATE_OPEN) {
+        /* Great ! will connected, now must login in to AMI */
         amic_cmd_login(conn, username, secret, on_login);
     }
 }
@@ -29,6 +33,7 @@ static void on_connection(amic_conn_t *conn,
 static void on_event(amic_conn_t *conn, 
                      amic_map_t keys) 
 {
+    /* Great ! out registered event was triggered */
     AMIC_DBG("ON EV %s", amic_get_ev_value(keys, "Event"));
 }
 
@@ -45,23 +50,28 @@ int main(int argc, char *argv[])
     username = strdup(argv[3]);
     secret = strdup(argv[4]);
 
+    /* We use the amic_conn_t struct for a lot of calls */
     amic_conn_t *conn = 0;
     amic_status_t status = AMIC_STATUS_SUCCESS;
 
+    /* Now we must init our connection */
     status = amic_init_conn(&conn, address, port);
     if (status != AMIC_STATUS_SUCCESS) {
         AMIC_ERR("Fail to create connection %d.\n", status);
         return 1;
     }
 
+    /* Ok trying to open a connection with AMI */
     status = amic_open(conn, on_connection);
 
     if (status != AMIC_STATUS_SUCCESS) {
         AMIC_ERR("Fail to open connection %d.\n", status);
     }
 
+    /* Everytime QueueMemberStatus happen the call back is called */
     amic_add_event(conn, "QueueMemberStatus", on_event);
 
+    /* Our main loop, and will block until close connection our fail to login */
     amic_run(conn);
 
     AMIC_DBG("Exit app %s\n", argv[0]);
