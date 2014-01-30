@@ -75,7 +75,9 @@ amic_status_t amic_cmd_login(amic_conn_t *conn,
     memset(cmd, '\0', sizeof(cmd));
     sprintf(cmd, CMD_LOGIN, username, secret);
 
+#ifndef NDEBUG
     AMIC_DBG("SEND COMMAND: \r\n%s", cmd);
+#endif
 
     int len = sizeof(cmd);
     char buffer[sizeof(cmd)]; 
@@ -98,7 +100,7 @@ amic_status_t amic_cmd_login(amic_conn_t *conn,
     return status;
 }
 
-amic_status_t amic_add_event(amic_conn_t *conn,
+amic_status_t amic_reg_event(amic_conn_t *conn,
                              const char *event,
                              amic_ev_cb ev_cb)
 {
@@ -110,7 +112,10 @@ amic_status_t amic_add_event(amic_conn_t *conn,
         return AMIC_STATUS_FAIL;
     }
 
+#ifndef NDEBUG
     AMIC_DBG("Added event listener %s", event);
+#endif
+
     return status;
 }
 

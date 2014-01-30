@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
     }
 
     /* Everytime QueueMemberStatus happen the call back is called */
-    amic_add_event(conn, "QueueMemberStatus", on_event);
+    amic_reg_event(conn, "QueueMemberStatus", on_event);
 
     /* Our main loop, and will block until close connection our fail to login */
     amic_run(conn);
