@@ -19,3 +19,6 @@
 *.exe
 *.out
 *.app
+c_hashmap/*
+libuv/*
+samples/amic_test

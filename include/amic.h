@@ -86,7 +86,7 @@ typedef void (*amic_ev_cb)(struct amic_conn_t *conn, amic_map_t ev_keys);
 
 /* Connection is the main struct, manages the sockets, connections 
    callbacks and commands */
-typedef struct amic_connt_t {
+typedef struct amic_conn_t {
     char *ip_addr;
     unsigned int port;
     amic_state_t state;
