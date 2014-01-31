@@ -4,6 +4,14 @@
 #include "amic.h"
 #include <regex.h>
 
+extern amic_status_t amic_ast_banner(const char *banner);
+extern amic_status_t amic_ast_success(const char *response);
+extern amic_status_t amic_ast_check_auth(const char *response);
+extern amic_status_t amic_ast_event(const char *resp);
+extern void remove_carriage_return(char *str);
+extern void get_event_param(char *str, char *key, char *value);
+extern void get_event_name(char *str, char *ev);
+
 amic_status_t amic_init_conn(amic_conn_t **conn,
                              char *ip_addr, 
                              unsigned int port)
@@ -21,7 +29,9 @@ amic_status_t amic_init_conn(amic_conn_t **conn,
     new_conn->state = AMIC_STATE_INIT;
     new_conn->ev_map = hashmap_new();
 
-    AMIC_DBG("Created amic_conn %s:%d", ip_addr, port);
+#ifndef NDEBUG
+    AMIC_DBG("Created amic_conn [%s:%d]", new_conn->ip_addr, new_conn->port);
+#endif
 
     //TODO: Check if is ipv4 or ipv6 connection
     uv_tcp_init(new_conn->loop, &new_conn->handler);
@@ -30,57 +40,12 @@ amic_status_t amic_init_conn(amic_conn_t **conn,
                          &new_conn->t.addr4);
 
     if (status != 0) {
-        AMIC_DBG("Get ip status %d:%s", status, uv_strerror(status));
+        AMIC_ERR("Get ip status %d:%s", status, uv_strerror(status));
         return AMIC_STATUS_CONNECTION_FAILED;
     }
 
     *conn = new_conn;
     return status;
-}
-
-static void remove_carriage_return(char *str) 
-{
-    char *src, *dst;
-    for (src = dst = str; *src != '\0'; src++) {
-        *dst = *src;
-        if (*dst != '\r') dst++;
-    }
-    *dst = '\0';
-}
-
-static void get_event_param(char *str, char *key, char *value) 
-{
-    int i = 0, last_pos = 0;
-    for (;i < strlen(str);i++) {
-        if (str[i] != ':') {
-            key[i] = str[i]; 
-        } else if(str[i] == ':') {
-            last_pos = i;
-            key = '\0';
-            break;
-        }
-    }
-
-    last_pos += 2;
-    for (i = last_pos;i < strlen(str);i++) {
-        value[i-last_pos] = str[i]; 
-    }
-
-    value = '\0';
-}
-
-static void get_event_name(char *str, char *ev) 
-{
-    char *p = strstr(str, ":");
-    int i = (p-str+2);
-    for (;i < strlen(str);i++) {
-        if (str[i] != '\r') {
-            ev[i-(p-str+2)] = str[i];
-        } else if (str[i] == '\r') {
-            ev = '\0';
-            break;
-        }
-    }
 }
 
 static void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) 
@@ -206,7 +171,9 @@ amic_status_t amic_open(amic_conn_t *conn,
     if (!conn)
         return AMIC_STATUS_NULL_PTR;
     
+#ifndef NDEBUG
     AMIC_DBG("Will connect to %s:%d", conn->ip_addr, conn->port);
+#endif
 
     conn->conn_cb = conn_cb;
     conn->tunnel.data = (void*) conn;
@@ -217,15 +184,33 @@ amic_status_t amic_open(amic_conn_t *conn,
                             on_connect);
 
     if (status != 0) {
+#ifndef NDEBUG
         AMIC_DBG("Get tcp connect status %d:%s", status, uv_strerror(status));
+#endif
         return AMIC_STATUS_CONNECTION_FAILED;
     }
 
     return status;
 }
 
+void on_amic_close(uv_handle_t *handle) 
+{
+    amic_conn_t *conn = (amic_conn_t*) handle->data;
+    if (!conn)
+        return;
+
+    free(conn->ip_addr);
+    hashmap_free(conn->ev_map);
+    free(conn);
+}
+
 void amic_close(amic_conn_t *conn)
 {
+    if (!conn)
+        return;
+    
+    conn->handler.data = (void*) conn;
+    uv_close((uv_handle_t*) &conn->handler, on_amic_close);
 }
 
 #endif

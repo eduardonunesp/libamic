@@ -14,6 +14,7 @@ c_hashmap/hashmap.c
 src/conn.c
 src/ast.c
 src/loop.c
+src/utils.c
 """)
 
 if not os.path.exists('libuv/configure'):
