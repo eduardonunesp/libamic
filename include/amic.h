@@ -68,7 +68,8 @@ typedef enum {
 /* Indicates the last command for a connection */
 typedef enum {
     AMIC_CMD_NONE = 0,
-    AMIC_CMD_LOGIN
+    AMIC_CMD_LOGIN, 
+    AMIC_CMD_QUEUE_STATUS
 } amic_cmd_t;
 
 /* Just familiarize a foreign struct */
@@ -162,6 +163,9 @@ amic_status_t amic_cmd_login(amic_conn_t *conn,
                              const char *username,
                              const char *secret,
                              amic_cmd_cb cmd_cb);
+
+amic_status_t amic_cmd_queue_status(amic_conn_t *conn,
+                                    amic_cmd_cb cmd_cb);
 
 /*
  * Register a new event to listen, if the command executed and dispatched

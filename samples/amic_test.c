@@ -21,11 +21,19 @@ static void on_connection(amic_conn_t *conn,
     }
 }
 
+static void on_queue_status(amic_conn_t *conn, 
+                     amic_status_t status) 
+{
+    AMIC_DBG("AAA %d", status);
+}
+
 static void on_event(amic_conn_t *conn, 
                      amic_map_t keys) 
 {
     /* Great ! out registered event was triggered */
     AMIC_DBG("ON EV %s", amic_get_ev_value(keys, "Event"));
+
+    amic_cmd_queue_status(conn, on_queue_status);
 }
 
 int main(int argc, char *argv[]) 

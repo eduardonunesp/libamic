@@ -48,7 +48,87 @@ amic_status_t amic_init_conn(amic_conn_t **conn,
     return status;
 }
 
-static void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) 
+typedef struct {
+    amic_conn_t *conn;
+    char *data;
+} process_event_pair_t;
+
+void process_event(uv_work_t *req)  
+{
+    assert(req);
+    assert(req->data);
+
+    process_event_pair_t *pep = 0;
+    pep = (process_event_pair_t*) req->data;
+
+    amic_conn_t *conn = 0;
+    conn = pep->conn;
+    char *data = pep->data;
+
+    char *cur_line = data;
+    int count = 0;
+    amic_ev_cb cb;
+    map_t map_keys = 0;
+    int map_err = MAP_MISSING;
+    while (cur_line) {
+        char *key = 0, *value = 0;
+        if (!cur_line) break;
+
+        char *next_line = strchr(cur_line, '\n');
+        if (next_line) *next_line = '\0';
+
+        if (cur_line != '\0' && *cur_line != '\r' && strlen(cur_line) > 0) {
+            const size_t kv_size = strlen(cur_line);
+            key = (char*) malloc(kv_size);
+            value = (char*) malloc(kv_size);
+
+            remove_carriage_return(cur_line);
+            get_event_param(cur_line, key, value);
+
+            if (!strncmp("Event", key, strlen(key))) {
+                count++;
+                if (count > 1) break;
+
+                map_err = hashmap_get(conn->ev_map, value, (void**) (&cb));
+                if (map_err != MAP_OK) {
+                    free(key); free(value);
+                    break;
+                }
+            }
+
+            if (map_err == MAP_OK) {
+                if (!map_keys)
+                    map_keys = hashmap_new();
+                    //TODO: Must delete key and value from mem someday
+                int put_err = hashmap_put(map_keys, key, value);
+                if (put_err != MAP_OK) {
+                    AMIC_ERR("Error on put key %s", key);
+                }
+            }
+        }
+
+        if (next_line) *next_line = '\n';    
+        cur_line = next_line ? (next_line+1) : NULL;
+    }
+
+    if (map_err == MAP_OK && map_keys) {
+        cb(conn, map_keys);
+        int index = 0;
+        hashmap_free(map_keys);
+    }
+    
+    free(pep->data);
+    free(pep);
+}
+
+void after_process_event(uv_work_t *req, int status) 
+{
+    assert(req);
+    assert(req->data);
+    free(req);
+}
+
+void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) 
 {
     if (nread <= -1) {
         if (nread != UV_EOF)
@@ -62,7 +142,6 @@ static void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
     char *data = (char*) malloc(sizeof(char) * (nread+1));
     data[nread] = '\0';
     memcpy(data, buf->base, nread+1);
-    free(buf->base);
 
     switch (conn->state) {
         case AMIC_STATE_INIT: {
@@ -85,54 +164,25 @@ static void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                     else
                         conn->cmd_cb((struct amic_conn_t*)conn, AMIC_STATUS_CONNECTION_FAILED);
                 } break;
+                case AMIC_CMD_QUEUE_STATUS: {
+                    AMIC_DBG("DATA: %s", data);
+                } break;
             }
 
             if (strstr(data, "Event:")) {
-                char *cur_line = data;
-                int count = 0;
-                amic_ev_cb cb;
-                map_t map_keys = 0;
-                int map_err = MAP_MISSING;
-                while (cur_line) {
-                    const size_t kv_size = 264;
-                    char key[kv_size]; memset(key,'\0', kv_size);
-                    char value[kv_size]; memset(value,'\0', kv_size);
+               uv_work_t *queue_req = 0;
+               queue_req = (uv_work_t*) malloc(sizeof(uv_work_t));
 
-                    char *next_line = strchr(cur_line, '\n');
-                    if (next_line) *next_line = '\0';
-
-                    if (cur_line != '\0' && *cur_line != '\r' && strlen(cur_line) > 0) {
-                        remove_carriage_return(cur_line);
-                        get_event_param(cur_line, key, value);
-
-                        if (!strncmp("Event", key, sizeof(key))) {
-                            count++;
-                            if (count > 1) break;
-
-                            char *ev_str = strdup(value);
-                            map_err = hashmap_get(conn->ev_map, ev_str, (void**) (&cb));
-                            if (map_err != MAP_OK) break;
-                        }
-
-                        //AMIC_DBG("KEY: [%s] VALUE: [%s]", key, value);
-
-                        if (map_err == MAP_OK) {
-                            if (!map_keys)
-                                map_keys = hashmap_new();
-                            int put_err = hashmap_put(map_keys, strdup(key), strdup(value));
-                            if (put_err != MAP_OK) {
-                                AMIC_ERR("Error on put key %s", key);
-                            }
-                        }
-                    }
-
-                    if (next_line) *next_line = '\n';    
-                    cur_line = next_line ? (next_line+1) : NULL;
-                }
-
-                if (map_err == MAP_OK && map_keys) {
-                    cb(conn, map_keys);
-                }
+               if (!queue_req) {
+                    AMIC_DBG("Cannot alloc work queue");
+               } else {
+                   process_event_pair_t *pep = 0;
+                   pep = (process_event_pair_t*) malloc(sizeof(process_event_pair_t));
+                   pep->conn = conn;
+                   pep->data = data;
+                   queue_req->data = (void*) pep;
+                   uv_queue_work(conn->loop, queue_req, process_event, after_process_event);
+               }
             }
 
             conn->cmd = AMIC_CMD_NONE;
@@ -145,14 +195,14 @@ static void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
             break;
     }
 
-    free(data);
+    free(buf->base);
 }
 
 void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
     *buf = uv_buf_init((char*) malloc(size), size);
 }
 
-static void on_connect(uv_connect_t *req, int status) 
+void on_connect(uv_connect_t *req, int status) 
 {
     if (status < 0) {
         AMIC_ERR("Connected status %d:%s", status, uv_strerror(status));

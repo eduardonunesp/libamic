@@ -8,6 +8,9 @@
                   "username: %s\r\n"   \
                   "secret: %s\r\n\r\n"
 
+#define CMD_QUEUE_STATUS "action: command\r\n"          \
+                         "command: queuestatus\r\n\r\n"
+
 amic_status_t regex_test(const char *regex_test, const char *need)
 {
     regex_t regex;
@@ -58,7 +61,7 @@ amic_status_t amic_ast_event(const char *resp)
     return regex_test("^Event:.*$", resp);
 }
 
-static void on_amic_cmd_login(uv_write_t *req, int status) 
+void on_amic_cmd_login(uv_write_t *req, int status) 
 {
 }
 
@@ -97,6 +100,41 @@ amic_status_t amic_cmd_login(amic_conn_t *conn,
         return AMIC_STATUS_CMD_FAILED;
     }
 
+    return status;
+}
+
+amic_status_t amic_cmd_queue_status(amic_conn_t *conn,
+                                    amic_cmd_cb cmd_cb)
+{
+    amic_status_t status = AMIC_STATUS_SUCCESS;
+    if (!conn)
+        return AMIC_STATUS_NULL_PTR;
+
+    char cmd[255];
+    memset(cmd, '\0', sizeof(cmd));
+    sprintf(cmd, CMD_QUEUE_STATUS);
+
+#ifndef NDEBUG
+    AMIC_DBG("SEND COMMAND: \r\n%s", cmd);
+#endif
+
+    int len = sizeof(cmd);
+    char buffer[sizeof(cmd)]; 
+
+    uv_buf_t buff = uv_buf_init(buffer, sizeof(buffer));
+    buff.len = len;
+    buff.base = cmd;
+
+    conn->cmd_cb = cmd_cb;
+    conn->cmd = AMIC_CMD_QUEUE_STATUS;
+
+    status = uv_write(&conn->w_req,
+                      (uv_stream_t*) &conn->handler,
+                      &buff, 1, on_amic_cmd_login); 
+    if (status != 0) {
+        AMIC_ERR("Error on send queuestatus command: %s", uv_strerror(status));
+        return AMIC_STATUS_CMD_FAILED;
+    }
     return status;
 }
 
